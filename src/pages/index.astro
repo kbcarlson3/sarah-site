@@ -20,7 +20,7 @@ products.sort((a, b) => {
   <Header />
 
   <main class="products">
-    {
+    {products.length > 0 ? (
       products.map((product) => (
         <ProductCard
           title={product.data.title}
@@ -30,7 +30,9 @@ products.sort((a, b) => {
           featured={product.data.featured}
         />
       ))
-    }
+    ) : (
+      <p class="empty">Products coming soon!</p>
+    )}
   </main>
 
   <Footer />
@@ -50,5 +52,14 @@ products.sort((a, b) => {
     .products {
       grid-template-columns: repeat(2, 1fr);
     }
+  }
+
+  .empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--color-text-light);
+    font-weight: 300;
+    font-size: 1.1rem;
+    padding: 3rem 0;
   }
 </style>

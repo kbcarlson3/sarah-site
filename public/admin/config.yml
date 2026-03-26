@@ -12,7 +12,6 @@ collections:
     create: true
     delete: true
     slug: "{{slug}}"
-    sortable_fields: ["sortOrder", "title", "date"]
     fields:
       - { label: "Title", name: "title", widget: "string" }
       - { label: "Product Image", name: "image", widget: "image" }
