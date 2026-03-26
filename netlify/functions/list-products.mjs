@@ -52,7 +52,10 @@ export default async (req) => {
         const image = frontmatter.match(/image:\s*"?([^"\n]*)"?/)?.[1] || "";
         const link = frontmatter.match(/link:\s*"?([^"\n]*)"?/)?.[1] || "";
         const sortOrder =
-          parseInt(frontmatter.match(/sortOrder:\s*(\d+)/)?.[1]) || 10;
+          parseInt(frontmatter.match(/sortOrder:\s*(\d+)/)?.[1]) || 1;
+        const featured =
+          frontmatter.match(/featured:\s*(true|false)/)?.[1] === "true";
+        const body = content.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
 
         products.push({
           slug: file.name.replace(".md", ""),
@@ -60,6 +63,8 @@ export default async (req) => {
           image,
           link,
           sortOrder,
+          featured,
+          description: body,
           sha: fileData.sha,
         });
       }

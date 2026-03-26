@@ -19,31 +19,51 @@ export default async (req) => {
 
   try {
     const formData = await req.formData();
+    const slug = formData.get("slug");
     const title = formData.get("title");
     const link = formData.get("link");
     const sortOrder = formData.get("sortOrder") || "1";
     const featured = formData.get("featured") === "true";
     const description = formData.get("description") || "";
     const imageFile = formData.get("image");
+    const existingImage = formData.get("existingImage") || "";
 
-    if (!title || !link) {
+    if (!slug || !title || !link) {
       return new Response(
-        JSON.stringify({ error: "Title and Amazon link are required" }),
+        JSON.stringify({ error: "Slug, title, and link are required" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
     const octokit = new Octokit({ auth: token });
-    const slug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-    const date = new Date().toISOString();
+    const filePath = `src/content/products/${slug}.md`;
+
+    // Get current file SHA
+    const { data: currentFile } = await octokit.repos.getContent({
+      owner: OWNER,
+      repo: REPO,
+      path: filePath,
+    });
+
+    // Get current commit for tree-based commit
+    const { data: ref } = await octokit.git.getRef({
+      owner: OWNER,
+      repo: REPO,
+      ref: `heads/${BRANCH}`,
+    });
+    const latestCommitSha = ref.object.sha;
+
+    const { data: commit } = await octokit.git.getCommit({
+      owner: OWNER,
+      repo: REPO,
+      commit_sha: latestCommitSha,
+    });
+    const baseTreeSha = commit.tree.sha;
 
     const files = [];
+    let imagePath = existingImage;
 
-    // Handle image upload
-    let imagePath = "";
+    // Handle new image upload
     if (imageFile && imageFile.size > 0) {
       const imageBuffer = await imageFile.arrayBuffer();
       const imageBase64 = Buffer.from(imageBuffer).toString("base64");
@@ -58,7 +78,12 @@ export default async (req) => {
       });
     }
 
-    // Create markdown content
+    // Get existing date from the current file
+    const currentContent = Buffer.from(currentFile.content, "base64").toString("utf-8");
+    const dateMatch = currentContent.match(/date:\s*(.+)/);
+    const date = dateMatch ? dateMatch[1].trim() : new Date().toISOString();
+
+    // Create updated markdown
     const frontmatter = [
       "---",
       `title: "${title.replace(/"/g, '\\"')}"`,
@@ -75,25 +100,10 @@ export default async (req) => {
       : `${frontmatter}\n`;
 
     files.push({
-      path: `src/content/products/${slug}.md`,
+      path: filePath,
       content: Buffer.from(markdownContent).toString("base64"),
       encoding: "base64",
     });
-
-    // Get current commit SHA
-    const { data: ref } = await octokit.git.getRef({
-      owner: OWNER,
-      repo: REPO,
-      ref: `heads/${BRANCH}`,
-    });
-    const latestCommitSha = ref.object.sha;
-
-    const { data: commit } = await octokit.git.getCommit({
-      owner: OWNER,
-      repo: REPO,
-      commit_sha: latestCommitSha,
-    });
-    const baseTreeSha = commit.tree.sha;
 
     // Create blobs and tree
     const treeItems = [];
@@ -119,16 +129,14 @@ export default async (req) => {
       tree: treeItems,
     });
 
-    // Create commit
     const { data: newCommit } = await octokit.git.createCommit({
       owner: OWNER,
       repo: REPO,
-      message: `Add product: ${title}`,
+      message: `Update product: ${title}`,
       tree: tree.sha,
       parents: [latestCommitSha],
     });
 
-    // Update branch ref
     await octokit.git.updateRef({
       owner: OWNER,
       repo: REPO,
@@ -137,11 +145,11 @@ export default async (req) => {
     });
 
     return new Response(
-      JSON.stringify({ success: true, slug }),
+      JSON.stringify({ success: true }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Error adding product:", error);
+    console.error("Error editing product:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { "Content-Type": "application/json" } }

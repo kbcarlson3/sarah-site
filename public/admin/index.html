@@ -241,7 +241,7 @@
         font-size: 0.7rem;
         color: #7a6b6b;
       }
-      .btn-delete {
+      .btn-delete, .btn-edit {
         background: none;
         border: 1px solid #e8a0a0;
         color: #e8a0a0;
@@ -251,6 +251,21 @@
         font-size: 0.7rem;
         cursor: pointer;
         flex-shrink: 0;
+      }
+      .btn-edit { border-color: #f4c2c2; color: #4a3f3f; }
+      .product-item-actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
+      .btn-cancel {
+        width: 100%;
+        padding: 0.75rem;
+        background: none;
+        color: #7a6b6b;
+        border: 1.5px solid #e8a0a0;
+        border-radius: 12px;
+        font-family: inherit;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        margin-top: 0.5rem;
       }
       .loading { text-align: center; color: #7a6b6b; font-size: 0.85rem; padding: 1rem; }
     </style>
@@ -292,7 +307,7 @@
         <div class="field-row">
           <div class="field">
             <label for="sortOrder">Display Order</label>
-            <input type="number" id="sortOrder" name="sortOrder" value="10" min="1" />
+            <input type="number" id="sortOrder" name="sortOrder" value="1" min="1" />
           </div>
           <div class="field toggle-field">
             <label for="featured">Favorite</label>
@@ -308,7 +323,10 @@
           <textarea id="description" name="description" placeholder="Why you love this product..."></textarea>
         </div>
 
+        <input type="hidden" id="edit-slug" />
+        <input type="hidden" id="existing-image" />
         <button type="submit" class="btn-submit" id="submit-btn">Add Product</button>
+        <button type="button" class="btn-cancel" id="cancel-btn" style="display:none" onclick="cancelEdit()">Cancel</button>
         <div class="status" id="status-msg"></div>
       </form>
 
@@ -366,12 +384,15 @@
       // Form submit
       const form = document.getElementById('product-form');
       const submitBtn = document.getElementById('submit-btn');
+      const cancelBtn = document.getElementById('cancel-btn');
       const statusMsg = document.getElementById('status-msg');
+      const headerTitle = document.querySelector('.admin-header h1');
+      let editMode = false;
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Adding...';
+        submitBtn.textContent = editMode ? 'Updating...' : 'Adding...';
         statusMsg.className = 'status';
 
         const formData = new FormData();
@@ -386,20 +407,26 @@
           formData.append('image', imageFile);
         }
 
+        let endpoint = '/.netlify/functions/add-product';
+        if (editMode) {
+          endpoint = '/.netlify/functions/edit-product';
+          formData.append('slug', document.getElementById('edit-slug').value);
+          formData.append('existingImage', document.getElementById('existing-image').value);
+        }
+
         try {
-          const res = await fetch('/.netlify/functions/add-product', {
+          const res = await fetch(endpoint, {
             method: 'POST',
             body: formData,
           });
           const data = await res.json();
 
           if (res.ok) {
-            statusMsg.textContent = 'Product added! Site will rebuild in ~30 seconds.';
+            statusMsg.textContent = editMode
+              ? 'Product updated! Site will rebuild in ~30 seconds.'
+              : 'Product added! Site will rebuild in ~30 seconds.';
             statusMsg.className = 'status success';
-            form.reset();
-            imageUpload.innerHTML = '<p>Tap to add photo</p>';
-            imageUpload.classList.remove('has-image');
-            document.getElementById('sortOrder').value = '10';
+            cancelEdit();
             loadProducts();
           } else {
             statusMsg.textContent = data.error || 'Something went wrong';
@@ -411,31 +438,72 @@
         }
 
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Add Product';
+        submitBtn.textContent = editMode ? 'Update Product' : 'Add Product';
       });
 
+      // Edit product
+      function editProduct(product) {
+        editMode = true;
+        headerTitle.textContent = 'Edit Product';
+        submitBtn.textContent = 'Update Product';
+        cancelBtn.style.display = 'block';
+
+        document.getElementById('title').value = product.title;
+        document.getElementById('link').value = product.link;
+        document.getElementById('sortOrder').value = product.sortOrder;
+        document.getElementById('featured').checked = product.featured;
+        document.getElementById('description').value = product.description || '';
+        document.getElementById('edit-slug').value = product.slug;
+        document.getElementById('existing-image').value = product.image;
+
+        if (product.image) {
+          imageUpload.innerHTML = `<img src="${product.image}" alt="Current" />`;
+          imageUpload.classList.add('has-image');
+        }
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      function cancelEdit() {
+        editMode = false;
+        headerTitle.textContent = 'Add Product';
+        submitBtn.textContent = 'Add Product';
+        cancelBtn.style.display = 'none';
+        form.reset();
+        imageUpload.innerHTML = '<p>Tap to add photo</p>';
+        imageUpload.classList.remove('has-image');
+        document.getElementById('sortOrder').value = '1';
+        document.getElementById('edit-slug').value = '';
+        document.getElementById('existing-image').value = '';
+      }
+
       // Load existing products
+      let productsCache = [];
+
       async function loadProducts() {
         const container = document.getElementById('products-container');
         container.innerHTML = '<p class="loading">Loading...</p>';
 
         try {
           const res = await fetch('/.netlify/functions/list-products');
-          const products = await res.json();
+          productsCache = await res.json();
 
-          if (products.length === 0) {
+          if (productsCache.length === 0) {
             container.innerHTML = '<p class="loading">No products yet</p>';
             return;
           }
 
-          container.innerHTML = products.map(p => `
+          container.innerHTML = productsCache.map((p, i) => `
             <div class="product-item">
               <img src="${p.image}" alt="${p.title}" onerror="this.style.display='none'" />
               <div class="product-item-info">
                 <h3>${p.title}</h3>
                 <p>Order: ${p.sortOrder}</p>
               </div>
-              <button class="btn-delete" onclick="deleteProduct('${p.slug}')">Delete</button>
+              <div class="product-item-actions">
+                <button class="btn-edit" onclick="editProduct(productsCache[${i}])">Edit</button>
+                <button class="btn-delete" onclick="deleteProduct('${p.slug}')">Delete</button>
+              </div>
             </div>
           `).join('');
         } catch (err) {
