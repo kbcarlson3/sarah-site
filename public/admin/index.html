@@ -1,12 +1,468 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Intentional Home Finds - Admin</title>
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Poppins', sans-serif;
+        background: #fdf8f6;
+        color: #4a3f3f;
+        min-height: 100vh;
+        padding: 1rem;
+      }
+
+      /* Auth screen */
+      #auth-screen {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 80vh;
+        text-align: center;
+      }
+      #auth-screen h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
+      #auth-screen p { font-size: 0.9rem; color: #7a6b6b; margin-bottom: 1.5rem; }
+      .btn-login {
+        background: #f4c2c2;
+        color: #4a3f3f;
+        border: none;
+        padding: 0.875rem 2rem;
+        border-radius: 12px;
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* Admin panel */
+      #admin-panel { display: none; max-width: 500px; margin: 0 auto; }
+      .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+      }
+      .admin-header h1 { font-size: 1.25rem; font-weight: 600; }
+      .btn-logout {
+        background: none;
+        border: 1px solid #e8a0a0;
+        color: #7a6b6b;
+        padding: 0.4rem 0.75rem;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 0.75rem;
+        cursor: pointer;
+      }
+
+      /* Form */
+      .form-section {
+        background: #fff;
+        border-radius: 16px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 12px rgba(244,194,194,0.3);
+      }
+      .form-section h2 {
+        font-size: 1rem;
+        font-weight: 500;
+        margin-bottom: 1rem;
+      }
+      .field { margin-bottom: 1rem; }
+      .field:last-child { margin-bottom: 0; }
+      .field label {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #7a6b6b;
+        margin-bottom: 0.35rem;
+      }
+      .field input[type="text"],
+      .field input[type="url"],
+      .field input[type="number"],
+      .field textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1.5px solid #f4c2c2;
+        border-radius: 10px;
+        font-family: inherit;
+        font-size: 1rem;
+        color: #4a3f3f;
+        background: #fdf8f6;
+        -webkit-appearance: none;
+      }
+      .field input:focus,
+      .field textarea:focus {
+        outline: none;
+        border-color: #e8a0a0;
+        background: #fff;
+      }
+      .field textarea { resize: vertical; min-height: 80px; }
+      .field-row {
+        display: flex;
+        gap: 0.75rem;
+      }
+      .field-row .field { flex: 1; }
+
+      /* Image upload */
+      .image-upload {
+        border: 2px dashed #f4c2c2;
+        border-radius: 10px;
+        padding: 1.25rem;
+        text-align: center;
+        cursor: pointer;
+        background: #fdf8f6;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .image-upload.has-image {
+        border-style: solid;
+        padding: 0;
+        overflow: hidden;
+      }
+      .image-upload p {
+        font-size: 0.85rem;
+        color: #7a6b6b;
+      }
+      .image-upload img {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        display: block;
+      }
+      .image-upload input { display: none; }
+
+      /* Toggle */
+      .toggle-field {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .toggle-field label { margin-bottom: 0; }
+      .toggle {
+        position: relative;
+        width: 48px;
+        height: 28px;
+      }
+      .toggle input { opacity: 0; width: 0; height: 0; }
+      .toggle-slider {
+        position: absolute;
+        inset: 0;
+        background: #ddd;
+        border-radius: 28px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .toggle-slider::before {
+        content: '';
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        left: 3px;
+        top: 3px;
+        background: #fff;
+        border-radius: 50%;
+        transition: transform 0.2s;
+      }
+      .toggle input:checked + .toggle-slider { background: #f4c2c2; }
+      .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+      /* Submit button */
+      .btn-submit {
+        width: 100%;
+        padding: 1rem;
+        background: #f4c2c2;
+        color: #4a3f3f;
+        border: none;
+        border-radius: 12px;
+        font-family: inherit;
+        font-size: 1.05rem;
+        font-weight: 500;
+        cursor: pointer;
+        margin-top: 0.5rem;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .btn-submit:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* Status message */
+      .status {
+        text-align: center;
+        padding: 0.75rem;
+        border-radius: 10px;
+        font-size: 0.85rem;
+        margin-top: 0.75rem;
+        display: none;
+      }
+      .status.success { display: block; background: #e8f5e9; color: #2e7d32; }
+      .status.error { display: block; background: #fce4ec; color: #c62828; }
+
+      /* Product list */
+      .product-list h2 {
+        font-size: 1rem;
+        font-weight: 500;
+        margin-bottom: 0.75rem;
+      }
+      .product-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        background: #fff;
+        border-radius: 12px;
+        margin-bottom: 0.5rem;
+        box-shadow: 0 1px 4px rgba(244,194,194,0.2);
+      }
+      .product-item img {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: #fce4ec;
+        flex-shrink: 0;
+      }
+      .product-item-info { flex: 1; min-width: 0; }
+      .product-item-info h3 {
+        font-size: 0.85rem;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .product-item-info p {
+        font-size: 0.7rem;
+        color: #7a6b6b;
+      }
+      .btn-delete {
+        background: none;
+        border: 1px solid #e8a0a0;
+        color: #e8a0a0;
+        padding: 0.35rem 0.6rem;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 0.7rem;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .loading { text-align: center; color: #7a6b6b; font-size: 0.85rem; padding: 1rem; }
+    </style>
   </head>
   <body>
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-    <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
+    <!-- Auth Screen -->
+    <div id="auth-screen">
+      <h1>Intentional Home Finds</h1>
+      <p>Admin</p>
+      <button class="btn-login" onclick="netlifyIdentity.open('login')">Log In</button>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="admin-panel">
+      <div class="admin-header">
+        <h1>Add Product</h1>
+        <button class="btn-logout" onclick="netlifyIdentity.logout()">Log out</button>
+      </div>
+
+      <form id="product-form" class="form-section">
+        <div class="field">
+          <label for="title">Product Title</label>
+          <input type="text" id="title" name="title" placeholder="e.g. Stanley Tumbler" required />
+        </div>
+
+        <div class="field">
+          <label>Product Image</label>
+          <div class="image-upload" id="image-upload" onclick="document.getElementById('image-input').click()">
+            <p>Tap to add photo</p>
+            <input type="file" id="image-input" name="image" accept="image/*" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="link">Amazon Link</label>
+          <input type="url" id="link" name="link" placeholder="https://amzn.to/..." required />
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="sortOrder">Display Order</label>
+            <input type="number" id="sortOrder" name="sortOrder" value="10" min="1" />
+          </div>
+          <div class="field toggle-field">
+            <label for="featured">Favorite</label>
+            <div class="toggle">
+              <input type="checkbox" id="featured" name="featured" />
+              <span class="toggle-slider"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="description">Description (optional)</label>
+          <textarea id="description" name="description" placeholder="Why you love this product..."></textarea>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submit-btn">Add Product</button>
+        <div class="status" id="status-msg"></div>
+      </form>
+
+      <div class="form-section product-list">
+        <h2>Your Products</h2>
+        <div id="products-container">
+          <p class="loading">Loading...</p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const user = netlifyIdentity.currentUser();
+      const authScreen = document.getElementById('auth-screen');
+      const adminPanel = document.getElementById('admin-panel');
+
+      function showAdmin() {
+        authScreen.style.display = 'none';
+        adminPanel.style.display = 'block';
+        loadProducts();
+      }
+
+      function showAuth() {
+        authScreen.style.display = 'flex';
+        adminPanel.style.display = 'none';
+      }
+
+      // Check login state
+      if (user) {
+        showAdmin();
+      }
+
+      netlifyIdentity.on('login', () => showAdmin());
+      netlifyIdentity.on('logout', () => {
+        showAuth();
+        window.location.reload();
+      });
+
+      // Image preview
+      const imageInput = document.getElementById('image-input');
+      const imageUpload = document.getElementById('image-upload');
+
+      imageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            imageUpload.innerHTML = `<img src="${ev.target.result}" alt="Preview" />`;
+            imageUpload.classList.add('has-image');
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      // Form submit
+      const form = document.getElementById('product-form');
+      const submitBtn = document.getElementById('submit-btn');
+      const statusMsg = document.getElementById('status-msg');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Adding...';
+        statusMsg.className = 'status';
+
+        const formData = new FormData();
+        formData.append('title', document.getElementById('title').value);
+        formData.append('link', document.getElementById('link').value);
+        formData.append('sortOrder', document.getElementById('sortOrder').value);
+        formData.append('featured', document.getElementById('featured').checked);
+        formData.append('description', document.getElementById('description').value);
+
+        const imageFile = document.getElementById('image-input').files[0];
+        if (imageFile) {
+          formData.append('image', imageFile);
+        }
+
+        try {
+          const res = await fetch('/.netlify/functions/add-product', {
+            method: 'POST',
+            body: formData,
+          });
+          const data = await res.json();
+
+          if (res.ok) {
+            statusMsg.textContent = 'Product added! Site will rebuild in ~30 seconds.';
+            statusMsg.className = 'status success';
+            form.reset();
+            imageUpload.innerHTML = '<p>Tap to add photo</p>';
+            imageUpload.classList.remove('has-image');
+            document.getElementById('sortOrder').value = '10';
+            loadProducts();
+          } else {
+            statusMsg.textContent = data.error || 'Something went wrong';
+            statusMsg.className = 'status error';
+          }
+        } catch (err) {
+          statusMsg.textContent = 'Network error. Try again.';
+          statusMsg.className = 'status error';
+        }
+
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Product';
+      });
+
+      // Load existing products
+      async function loadProducts() {
+        const container = document.getElementById('products-container');
+        container.innerHTML = '<p class="loading">Loading...</p>';
+
+        try {
+          const res = await fetch('/.netlify/functions/list-products');
+          const products = await res.json();
+
+          if (products.length === 0) {
+            container.innerHTML = '<p class="loading">No products yet</p>';
+            return;
+          }
+
+          container.innerHTML = products.map(p => `
+            <div class="product-item">
+              <img src="${p.image}" alt="${p.title}" onerror="this.style.display='none'" />
+              <div class="product-item-info">
+                <h3>${p.title}</h3>
+                <p>Order: ${p.sortOrder}</p>
+              </div>
+              <button class="btn-delete" onclick="deleteProduct('${p.slug}')">Delete</button>
+            </div>
+          `).join('');
+        } catch (err) {
+          container.innerHTML = '<p class="loading">Could not load products</p>';
+        }
+      }
+
+      // Delete product
+      async function deleteProduct(slug) {
+        if (!confirm('Delete this product?')) return;
+
+        try {
+          const res = await fetch('/.netlify/functions/delete-product', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug }),
+          });
+
+          if (res.ok) {
+            loadProducts();
+          } else {
+            alert('Failed to delete. Try again.');
+          }
+        } catch {
+          alert('Network error. Try again.');
+        }
+      }
+    </script>
   </body>
 </html>
