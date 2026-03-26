@@ -1,0 +1,54 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Header from "../components/Header.astro";
+import ProductCard from "../components/ProductCard.astro";
+import Footer from "../components/Footer.astro";
+
+const products = await getCollection("products");
+
+// Sort by sortOrder (lower first), then by date (newest first) as fallback
+products.sort((a, b) => {
+  const orderA = a.data.sortOrder ?? 999;
+  const orderB = b.data.sortOrder ?? 999;
+  if (orderA !== orderB) return orderA - orderB;
+  return b.data.date.getTime() - a.data.date.getTime();
+});
+---
+
+<BaseLayout>
+  <Header />
+
+  <main class="products">
+    {
+      products.map((product) => (
+        <ProductCard
+          title={product.data.title}
+          image={product.data.image}
+          link={product.data.link}
+          description={product.body}
+          featured={product.data.featured}
+        />
+      ))
+    }
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<style>
+  .products {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    padding: 0 1rem 2rem;
+    max-width: var(--max-width);
+    width: 100%;
+  }
+
+  @media (min-width: 480px) {
+    .products {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+</style>

@@ -1,0 +1,48 @@
+:root {
+  --color-pink: #f4c2c2;
+  --color-pink-light: #fce4ec;
+  --color-pink-dark: #e8a0a0;
+  --color-white: #ffffff;
+  --color-cream: #fdf8f6;
+  --color-text: #4a3f3f;
+  --color-text-light: #7a6b6b;
+  --color-shadow: rgba(244, 194, 194, 0.3);
+
+  --font-family: "Poppins", sans-serif;
+  --max-width: 680px;
+  --card-radius: 16px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--color-cream);
+  color: var(--color-text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
