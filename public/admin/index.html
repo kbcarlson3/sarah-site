@@ -502,19 +502,43 @@
             return;
           }
 
-          container.innerHTML = productsCache.map((p, i) => `
-            <div class="product-item">
-              <img src="${p.image}" alt="${p.title}" onerror="this.style.display='none'" />
-              <div class="product-item-info">
-                <h3>${p.title}</h3>
-                <p>Order: ${p.sortOrder}</p>
-              </div>
-              <div class="product-item-actions">
-                <button class="btn-edit" onclick="editProduct(productsCache[${i}])">Edit</button>
-                <button class="btn-delete" onclick="deleteProduct('${p.slug}')">Delete</button>
-              </div>
-            </div>
-          `).join('');
+          container.textContent = '';
+          productsCache.forEach((p, i) => {
+            const item = document.createElement('div');
+            item.className = 'product-item';
+
+            const img = document.createElement('img');
+            img.src = p.image;
+            img.alt = p.title;
+            img.onerror = function() { this.style.display = 'none'; };
+            item.appendChild(img);
+
+            const info = document.createElement('div');
+            info.className = 'product-item-info';
+            const h3 = document.createElement('h3');
+            h3.textContent = p.title;
+            const orderP = document.createElement('p');
+            orderP.textContent = 'Order: ' + p.sortOrder;
+            info.appendChild(h3);
+            info.appendChild(orderP);
+            item.appendChild(info);
+
+            const actions = document.createElement('div');
+            actions.className = 'product-item-actions';
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn-edit';
+            editBtn.textContent = 'Edit';
+            editBtn.addEventListener('click', () => editProduct(productsCache[i]));
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn-delete';
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.addEventListener('click', () => deleteProduct(p.slug));
+            actions.appendChild(editBtn);
+            actions.appendChild(deleteBtn);
+            item.appendChild(actions);
+
+            container.appendChild(item);
+          });
         } catch (err) {
           container.innerHTML = '<p class="loading">Could not load products</p>';
         }
