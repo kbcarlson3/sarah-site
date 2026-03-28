@@ -27,9 +27,6 @@ export interface ProductInput {
   imagePath?: string;
 }
 
-const CACHE_KEY = new Request("https://cache.internal/products");
-const CACHE_TTL = 60; // seconds
-
 function parseFrontmatter(
   content: string,
   slug: string,
@@ -83,19 +80,24 @@ function buildMarkdown(data: ProductInput, date: string): string {
     : `${frontmatter}\n`;
 }
 
-export async function bustCache(): Promise<void> {
-  const cache = caches.default;
-  await cache.delete(CACHE_KEY);
+function buildMarkdownFromProduct(product: Product, newSortOrder: number): string {
+  const frontmatter = [
+    "---",
+    `title: "${(product.title || "").replace(/"/g, '\\"')}"`,
+    `image: "${product.image || ""}"`,
+    `link: "${product.link || ""}"`,
+    `date: ${product.date}`,
+    `sortOrder: ${newSortOrder}`,
+    `featured: ${product.featured}`,
+    "---",
+  ].join("\n");
+
+  return product.description
+    ? `${frontmatter}\n${product.description}\n`
+    : `${frontmatter}\n`;
 }
 
 export async function getProducts(token: string): Promise<Product[]> {
-  // Try cache first
-  const cache = caches.default;
-  const cached = await cache.match(CACHE_KEY);
-  if (cached) {
-    return cached.json();
-  }
-
   const octokit = new Octokit({ auth: token });
 
   let files: Array<{ name: string; path: string }>;
@@ -127,16 +129,7 @@ export async function getProducts(token: string): Promise<Product[]> {
     products.push(parseFrontmatter(content, slug, fileData.sha));
   }
 
-  // Store in edge cache
-  const response = new Response(JSON.stringify(products), {
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": `max-age=${CACHE_TTL}`,
-    },
-  });
-  await cache.put(CACHE_KEY, response.clone());
-
-  return response.json();
+  return products;
 }
 
 async function commitFiles(
@@ -196,6 +189,26 @@ async function commitFiles(
   });
 }
 
+async function getBumpedFiles(
+  token: string,
+  targetOrder: number,
+  excludeSlug?: string,
+): Promise<Array<{ path: string; content: string; encoding: string }>> {
+  const products = await getProducts(token);
+  const toBump = products.filter(
+    (p) => p.sortOrder >= targetOrder && p.slug !== excludeSlug,
+  );
+
+  return toBump.map((p) => {
+    const markdown = buildMarkdownFromProduct(p, p.sortOrder + 1);
+    return {
+      path: `${PRODUCTS_PATH}/${p.slug}.md`,
+      content: Buffer.from(markdown).toString("base64"),
+      encoding: "base64",
+    };
+  });
+}
+
 export async function addProduct(
   token: string,
   data: ProductInput,
@@ -208,6 +221,8 @@ export async function addProduct(
   const date = new Date().toISOString();
   const markdown = buildMarkdown(data, date);
 
+  const bumpedFiles = await getBumpedFiles(token, data.sortOrder ?? 1);
+
   await commitFiles(
     octokit,
     [
@@ -216,11 +231,11 @@ export async function addProduct(
         content: Buffer.from(markdown).toString("base64"),
         encoding: "base64",
       },
+      ...bumpedFiles,
     ],
     `Add product: ${data.title}`,
   );
 
-  await bustCache();
   return slug;
 }
 
@@ -250,6 +265,8 @@ export async function editProduct(
 
   const markdown = buildMarkdown(data, date);
 
+  const bumpedFiles = await getBumpedFiles(token, data.sortOrder ?? 1, slug);
+
   await commitFiles(
     octokit,
     [
@@ -258,11 +275,10 @@ export async function editProduct(
         content: Buffer.from(markdown).toString("base64"),
         encoding: "base64",
       },
+      ...bumpedFiles,
     ],
     `Update product: ${data.title}`,
   );
-
-  await bustCache();
 }
 
 export async function deleteProduct(
@@ -288,6 +304,4 @@ export async function deleteProduct(
     sha: fileData.sha,
     branch: BRANCH,
   });
-
-  await bustCache();
 }
