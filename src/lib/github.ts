@@ -27,6 +27,16 @@ export interface ProductInput {
   imagePath?: string;
 }
 
+interface MarkdownFields {
+  title: string;
+  image: string;
+  link: string;
+  date: string;
+  sortOrder: number;
+  featured: boolean;
+  description?: string;
+}
+
 function parseFrontmatter(
   content: string,
   slug: string,
@@ -63,43 +73,32 @@ function parseFrontmatter(
   };
 }
 
-function buildMarkdown(data: ProductInput, date: string): string {
+function buildMarkdown(fields: MarkdownFields): string {
   const frontmatter = [
     "---",
-    `title: "${(data.title || "").replace(/"/g, '\\"')}"`,
-    `image: "${data.imagePath || ""}"`,
-    `link: "${data.link || ""}"`,
-    `date: ${date}`,
-    `sortOrder: ${data.sortOrder ?? 1}`,
-    `featured: ${data.featured ?? false}`,
+    `title: "${(fields.title || "").replace(/"/g, '\\"')}"`,
+    `image: "${fields.image || ""}"`,
+    `link: "${fields.link || ""}"`,
+    `date: ${fields.date}`,
+    `sortOrder: ${fields.sortOrder}`,
+    `featured: ${fields.featured}`,
     "---",
   ].join("\n");
 
-  return data.description
-    ? `${frontmatter}\n${data.description}\n`
+  return fields.description
+    ? `${frontmatter}\n${fields.description}\n`
     : `${frontmatter}\n`;
 }
 
-function buildMarkdownFromProduct(product: Product, newSortOrder: number): string {
-  const frontmatter = [
-    "---",
-    `title: "${(product.title || "").replace(/"/g, '\\"')}"`,
-    `image: "${product.image || ""}"`,
-    `link: "${product.link || ""}"`,
-    `date: ${product.date}`,
-    `sortOrder: ${newSortOrder}`,
-    `featured: ${product.featured}`,
-    "---",
-  ].join("\n");
-
-  return product.description
-    ? `${frontmatter}\n${product.description}\n`
-    : `${frontmatter}\n`;
+function toBase64File(path: string, content: string) {
+  return {
+    path,
+    content: Buffer.from(content).toString("base64"),
+    encoding: "base64",
+  };
 }
 
-export async function getProducts(token: string): Promise<Product[]> {
-  const octokit = new Octokit({ auth: token });
-
+async function fetchProducts(octokit: Octokit): Promise<Product[]> {
   let files: Array<{ name: string; path: string }>;
   try {
     const { data } = await octokit.repos.getContent({
@@ -112,24 +111,26 @@ export async function getProducts(token: string): Promise<Product[]> {
     files = [];
   }
 
-  const products: Product[] = [];
-  for (const file of files) {
-    if (!file.name.endsWith(".md")) continue;
+  const mdFiles = files.filter((f) => f.name.endsWith(".md"));
 
-    const { data: fileData } = await octokit.repos.getContent({
-      owner: OWNER,
-      repo: REPO,
-      path: file.path,
-    });
+  const products = await Promise.all(
+    mdFiles.map(async (file) => {
+      const { data: fileData } = await octokit.repos.getContent({
+        owner: OWNER,
+        repo: REPO,
+        path: file.path,
+      });
+      if (!("content" in fileData)) return null;
+      const content = Buffer.from(fileData.content, "base64").toString("utf-8");
+      return parseFrontmatter(content, file.name.replace(".md", ""), fileData.sha);
+    }),
+  );
 
-    if (!("content" in fileData)) continue;
+  return products.filter((p): p is Product => p !== null);
+}
 
-    const content = Buffer.from(fileData.content, "base64").toString("utf-8");
-    const slug = file.name.replace(".md", "");
-    products.push(parseFrontmatter(content, slug, fileData.sha));
-  }
-
-  return products;
+export async function getProducts(token: string): Promise<Product[]> {
+  return fetchProducts(new Octokit({ auth: token }));
 }
 
 async function commitFiles(
@@ -150,21 +151,22 @@ async function commitFiles(
     commit_sha: latestCommitSha,
   });
 
-  const treeItems = [];
-  for (const file of files) {
-    const { data: blob } = await octokit.git.createBlob({
-      owner: OWNER,
-      repo: REPO,
-      content: file.content,
-      encoding: file.encoding,
-    });
-    treeItems.push({
-      path: file.path,
-      mode: "100644" as const,
-      type: "blob" as const,
-      sha: blob.sha,
-    });
-  }
+  const treeItems = await Promise.all(
+    files.map(async (file) => {
+      const { data: blob } = await octokit.git.createBlob({
+        owner: OWNER,
+        repo: REPO,
+        content: file.content,
+        encoding: file.encoding,
+      });
+      return {
+        path: file.path,
+        mode: "100644" as const,
+        type: "blob" as const,
+        sha: blob.sha,
+      };
+    }),
+  );
 
   const { data: tree } = await octokit.git.createTree({
     owner: OWNER,
@@ -189,24 +191,19 @@ async function commitFiles(
   });
 }
 
-async function getBumpedFiles(
-  token: string,
+function getBumpedFiles(
+  products: Product[],
   targetOrder: number,
   excludeSlug?: string,
-): Promise<Array<{ path: string; content: string; encoding: string }>> {
-  const products = await getProducts(token);
-  const toBump = products.filter(
-    (p) => p.sortOrder >= targetOrder && p.slug !== excludeSlug,
-  );
-
-  return toBump.map((p) => {
-    const markdown = buildMarkdownFromProduct(p, p.sortOrder + 1);
-    return {
-      path: `${PRODUCTS_PATH}/${p.slug}.md`,
-      content: Buffer.from(markdown).toString("base64"),
-      encoding: "base64",
-    };
-  });
+) {
+  return products
+    .filter((p) => p.sortOrder >= targetOrder && p.slug !== excludeSlug)
+    .map((p) =>
+      toBase64File(
+        `${PRODUCTS_PATH}/${p.slug}.md`,
+        buildMarkdown({ ...p, image: p.image, sortOrder: p.sortOrder + 1 }),
+      ),
+    );
 }
 
 export async function addProduct(
@@ -219,20 +216,24 @@ export async function addProduct(
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   const date = new Date().toISOString();
-  const markdown = buildMarkdown(data, date);
+  const sortOrder = data.sortOrder ?? 1;
 
-  const bumpedFiles = await getBumpedFiles(token, data.sortOrder ?? 1);
+  const products = await fetchProducts(octokit);
+  const bumpedFiles = getBumpedFiles(products, sortOrder);
+
+  const markdown = buildMarkdown({
+    title: data.title,
+    image: data.imagePath || "",
+    link: data.link,
+    date,
+    sortOrder,
+    featured: data.featured ?? false,
+    description: data.description,
+  });
 
   await commitFiles(
     octokit,
-    [
-      {
-        path: `${PRODUCTS_PATH}/${slug}.md`,
-        content: Buffer.from(markdown).toString("base64"),
-        encoding: "base64",
-      },
-      ...bumpedFiles,
-    ],
+    [toBase64File(`${PRODUCTS_PATH}/${slug}.md`, markdown), ...bumpedFiles],
     `Add product: ${data.title}`,
   );
 
@@ -245,38 +246,27 @@ export async function editProduct(
   data: ProductInput,
 ): Promise<void> {
   const octokit = new Octokit({ auth: token });
-  const filePath = `${PRODUCTS_PATH}/${slug}.md`;
+  const sortOrder = data.sortOrder ?? 1;
 
-  // Get existing date
-  const { data: currentFile } = await octokit.repos.getContent({
-    owner: OWNER,
-    repo: REPO,
-    path: filePath,
+  const products = await fetchProducts(octokit);
+  const existing = products.find((p) => p.slug === slug);
+  const date = existing?.date || new Date().toISOString();
+
+  const bumpedFiles = getBumpedFiles(products, sortOrder, slug);
+
+  const markdown = buildMarkdown({
+    title: data.title,
+    image: data.imagePath || "",
+    link: data.link,
+    date,
+    sortOrder,
+    featured: data.featured ?? false,
+    description: data.description,
   });
-
-  let date = new Date().toISOString();
-  if ("content" in currentFile) {
-    const currentContent = Buffer.from(currentFile.content, "base64").toString(
-      "utf-8",
-    );
-    const dateMatch = currentContent.match(/date:\s*(.+)/);
-    if (dateMatch) date = dateMatch[1].trim();
-  }
-
-  const markdown = buildMarkdown(data, date);
-
-  const bumpedFiles = await getBumpedFiles(token, data.sortOrder ?? 1, slug);
 
   await commitFiles(
     octokit,
-    [
-      {
-        path: filePath,
-        content: Buffer.from(markdown).toString("base64"),
-        encoding: "base64",
-      },
-      ...bumpedFiles,
-    ],
+    [toBase64File(`${PRODUCTS_PATH}/${slug}.md`, markdown), ...bumpedFiles],
     `Update product: ${data.title}`,
   );
 }
