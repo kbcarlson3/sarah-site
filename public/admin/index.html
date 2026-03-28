@@ -311,10 +311,10 @@
           </div>
           <div class="field toggle-field">
             <label for="featured">Favorite</label>
-            <div class="toggle">
+            <label class="toggle" for="featured">
               <input type="checkbox" id="featured" name="featured" />
               <span class="toggle-slider"></span>
-            </div>
+            </label>
           </div>
         </div>
 
@@ -374,7 +374,11 @@
         if (file) {
           const reader = new FileReader();
           reader.onload = (ev) => {
-            imageUpload.innerHTML = `<img src="${ev.target.result}" alt="Preview" />`;
+            imageUpload.querySelector('img, p')?.remove();
+            imageUpload.insertBefore(
+              Object.assign(document.createElement('img'), { src: ev.target.result, alt: 'Preview' }),
+              imageInput
+            );
             imageUpload.classList.add('has-image');
           };
           reader.readAsDataURL(file);
