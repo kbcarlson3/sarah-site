@@ -1,12 +1,13 @@
 import type { APIRoute } from "astro";
+import { env } from "cloudflare:workers";
 
-export const GET: APIRoute = async ({ params, locals }) => {
+export const GET: APIRoute = async ({ params }) => {
   const path = params.path;
   if (!path) {
     return new Response("Not found", { status: 404 });
   }
 
-  const bucket = locals.runtime.env.PRODUCT_IMAGES;
+  const bucket = env.PRODUCT_IMAGES;
   const object = await bucket.get(path);
 
   if (!object) {

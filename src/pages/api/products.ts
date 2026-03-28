@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
+import { env } from "cloudflare:workers";
 import { getProducts, addProduct } from "../../lib/github";
 
-export const GET: APIRoute = async ({ locals }) => {
-  const env = locals.runtime.env;
+export const GET: APIRoute = async () => {
 
   try {
     const products = await getProducts(env.GITHUB_TOKEN);
@@ -20,8 +20,7 @@ export const GET: APIRoute = async ({ locals }) => {
   }
 };
 
-export const POST: APIRoute = async ({ request, locals }) => {
-  const env = locals.runtime.env;
+export const POST: APIRoute = async ({ request }) => {
 
   try {
     const formData = await request.formData();

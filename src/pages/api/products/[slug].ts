@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
+import { env } from "cloudflare:workers";
 import { editProduct, deleteProduct } from "../../../lib/github";
 
-export const PUT: APIRoute = async ({ params, request, locals }) => {
-  const env = locals.runtime.env;
+export const PUT: APIRoute = async ({ params, request }) => {
   const slug = params.slug;
 
   if (!slug) {
@@ -65,8 +65,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   }
 };
 
-export const DELETE: APIRoute = async ({ params, locals }) => {
-  const env = locals.runtime.env;
+export const DELETE: APIRoute = async ({ params }) => {
   const slug = params.slug;
 
   if (!slug) {

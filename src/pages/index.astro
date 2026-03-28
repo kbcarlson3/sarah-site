@@ -3,9 +3,9 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import Header from "../components/Header.astro";
 import ProductCard from "../components/ProductCard.astro";
 import Footer from "../components/Footer.astro";
+import { env } from "cloudflare:workers";
 import { getProducts } from "../lib/github";
 
-const env = Astro.locals.runtime.env;
 const products = await getProducts(env.GITHUB_TOKEN);
 
 // Sort by sortOrder (lower first), then by date (newest first) as fallback
