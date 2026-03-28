@@ -1,0 +1,7 @@
+name = "sarah-site"
+compatibility_date = "2026-03-17"
+compatibility_flags = ["nodejs_compat"]
+
+[[r2_buckets]]
+binding = "PRODUCT_IMAGES"
+bucket_name = "sarah-site-images"

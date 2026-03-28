@@ -4,7 +4,6 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Intentional Home Finds - Admin</title>
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -18,32 +17,8 @@
         padding: 1rem;
       }
 
-      /* Auth screen */
-      #auth-screen {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        min-height: 80vh;
-        text-align: center;
-      }
-      #auth-screen h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
-      #auth-screen p { font-size: 0.9rem; color: #7a6b6b; margin-bottom: 1.5rem; }
-      .btn-login {
-        background: #f4c2c2;
-        color: #4a3f3f;
-        border: none;
-        padding: 0.875rem 2rem;
-        border-radius: 12px;
-        font-family: inherit;
-        font-size: 1rem;
-        font-weight: 500;
-        cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
-      }
-
       /* Admin panel */
-      #admin-panel { display: none; max-width: 500px; margin: 0 auto; }
+      #admin-panel { max-width: 500px; margin: 0 auto; }
       .admin-header {
         display: flex;
         justify-content: space-between;
@@ -271,18 +246,11 @@
     </style>
   </head>
   <body>
-    <!-- Auth Screen -->
-    <div id="auth-screen">
-      <h1>Intentional Home Finds</h1>
-      <p>Admin</p>
-      <button class="btn-login" onclick="netlifyIdentity.open('login')">Log In</button>
-    </div>
-
-    <!-- Admin Panel -->
+    <!-- Admin Panel (auth handled by Cloudflare Access) -->
     <div id="admin-panel">
       <div class="admin-header">
         <h1>Add Product</h1>
-        <button class="btn-logout" onclick="netlifyIdentity.logout()">Log out</button>
+        <button class="btn-logout" onclick="window.location.href='/cdn-cgi/access/logout'">Log out</button>
       </div>
 
       <form id="product-form" class="form-section">
@@ -339,31 +307,8 @@
     </div>
 
     <script>
-      const user = netlifyIdentity.currentUser();
-      const authScreen = document.getElementById('auth-screen');
-      const adminPanel = document.getElementById('admin-panel');
-
-      function showAdmin() {
-        authScreen.style.display = 'none';
-        adminPanel.style.display = 'block';
-        loadProducts();
-      }
-
-      function showAuth() {
-        authScreen.style.display = 'flex';
-        adminPanel.style.display = 'none';
-      }
-
-      // Check login state
-      if (user) {
-        showAdmin();
-      }
-
-      netlifyIdentity.on('login', () => showAdmin());
-      netlifyIdentity.on('logout', () => {
-        showAuth();
-        window.location.reload();
-      });
+      // Load products on page load (auth handled by Cloudflare Access)
+      loadProducts();
 
       // Image preview
       const imageInput = document.getElementById('image-input');
@@ -453,24 +398,26 @@
           formData.append('image', compressed);
         }
 
-        let endpoint = '/.netlify/functions/add-product';
+        let endpoint = '/api/products';
+        let method = 'POST';
         if (editMode) {
-          endpoint = '/.netlify/functions/edit-product';
-          formData.append('slug', document.getElementById('edit-slug').value);
+          const slug = document.getElementById('edit-slug').value;
+          endpoint = `/api/products/${slug}`;
+          method = 'PUT';
           formData.append('existingImage', document.getElementById('existing-image').value);
         }
 
         try {
           const res = await fetch(endpoint, {
-            method: 'POST',
+            method,
             body: formData,
           });
           const data = await res.json();
 
           if (res.ok) {
             statusMsg.textContent = editMode
-              ? 'Product updated! Site will rebuild in ~30 seconds.'
-              : 'Product added! Site will rebuild in ~30 seconds.';
+              ? 'Product updated! Changes are live.'
+              : 'Product added! Changes are live.';
             statusMsg.className = 'status success';
             cancelEdit();
             loadProducts();
@@ -503,7 +450,17 @@
         document.getElementById('existing-image').value = product.image;
 
         if (product.image) {
-          imageUpload.innerHTML = `<img src="${product.image}" alt="Current" />`;
+          const existingImg = imageUpload.querySelector('img');
+          const existingP = imageUpload.querySelector('p');
+          if (existingImg) {
+            existingImg.src = product.image;
+          } else {
+            if (existingP) existingP.remove();
+            imageUpload.insertBefore(
+              Object.assign(document.createElement('img'), { src: product.image, alt: 'Current' }),
+              imageInput
+            );
+          }
           imageUpload.classList.add('has-image');
         }
 
@@ -516,7 +473,13 @@
         submitBtn.textContent = 'Add Product';
         cancelBtn.style.display = 'none';
         form.reset();
-        imageUpload.innerHTML = '<p>Tap to add photo</p>';
+        const existingImg = imageUpload.querySelector('img');
+        if (existingImg) existingImg.remove();
+        if (!imageUpload.querySelector('p')) {
+          imageUpload.insertBefore(document.createElement('p'), imageInput);
+          imageUpload.querySelector('p').textContent = 'Tap to add photo';
+        }
+        imageInput.value = '';
         imageUpload.classList.remove('has-image');
         document.getElementById('sortOrder').value = '1';
         document.getElementById('edit-slug').value = '';
@@ -531,7 +494,7 @@
         container.innerHTML = '<p class="loading">Loading...</p>';
 
         try {
-          const res = await fetch('/.netlify/functions/list-products');
+          const res = await fetch('/api/products');
           productsCache = await res.json();
 
           if (productsCache.length === 0) {
@@ -562,10 +525,8 @@
         if (!confirm('Delete this product?')) return;
 
         try {
-          const res = await fetch('/.netlify/functions/delete-product', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ slug }),
+          const res = await fetch(`/api/products/${slug}`, {
+            method: 'DELETE',
           });
 
           if (res.ok) {

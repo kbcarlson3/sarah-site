@@ -12,7 +12,11 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^13.1.4",
     "@octokit/rest": "^22.0.1",
     "astro": "^6.0.8"
+  },
+  "devDependencies": {
+    "wrangler": "^4.78.0"
   }
 }
